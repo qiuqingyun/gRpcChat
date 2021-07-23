@@ -1,5 +1,6 @@
 package org.gRpcChat;
 
+import com.google.protobuf.TextFormat;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import org.apache.commons.cli.*;
@@ -7,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Random;
 import java.util.Scanner;
 import java.util.concurrent.CountDownLatch;
@@ -107,35 +109,42 @@ public class GRpcModule {
                 }
                 Scanner scanner = new Scanner(System.in);
                 //循环，直到输入#logout
-                while (true) {
+                boolean completeFlag = false;
+                do {
                     //发送消息
                     System.out.print("\rSend(#act/Name@Message): ");
                     String inputStr = scanner.nextLine();
-                    if (inputStr.contains("#") && inputStr.contains("/") && inputStr.contains("@")) {//发送信息模式
-                        try {
-                            CountDownLatch finishLatch = client.post(inputStr.split("/")[0], inputStr.split("/")[1].split("@")[0], inputStr.split("/")[1].split("@")[1]);
-                            if (!finishLatch.await(1, TimeUnit.MINUTES)) {
-                                logger.warn("Post message can not finish within 1 minutes");
+                    String warnMessage = null;
+                    CountDownLatch finishLatch = null;
+                    try {
+                        switch (inputStr) {
+                            case "#logout" -> {//登出
+                                finishLatch = client.logout();
+                                warnMessage = "Logout";
+                                completeFlag = true;
                             }
-                        } catch (InterruptedException e) {
-                            logger.warn("Post message failed.");
-                            e.printStackTrace();
-                        }
-                    } else if (inputStr.compareTo("#logout") == 0) {
-                        try {
-                            CountDownLatch finishLatch = client.logout();
-                            if (!finishLatch.await(1, TimeUnit.MINUTES)) {
-                                logger.warn("Logout can not finish within 1 minutes");
+                            case "#loadUserList" -> {
+                                finishLatch = client.loadUserList();
+                                warnMessage = "Load user list";
                             }
-                        } catch (InterruptedException e) {
-                            logger.warn("Logout failed.");
-                            e.printStackTrace();
+                            default -> {
+                                if (inputStr.contains("#") && inputStr.contains("/") && inputStr.contains("@")) {//发送信息模式
+                                    finishLatch = client.post(inputStr.split("/")[0], inputStr.split("/")[1].split("@")[0], inputStr.split("/")[1].split("@")[1]);
+                                    warnMessage = "Post message";
+                                } else {
+                                    finishLatch = new CountDownLatch(0);
+                                    System.out.println("Format error");
+                                }
+                            }
                         }
-                        break;
-                    } else {
-                        System.out.println("Format error");
+                        if (!finishLatch.await(1, TimeUnit.MINUTES)) {
+                            logger.warn(warnMessage + " can not finish within 1 minutes");
+                        }
+                    } catch (InterruptedException e) {
+                        logger.warn(warnMessage + " failed.");
+                        e.printStackTrace();
                     }
-                }
+                } while (!completeFlag);
                 try {
                     channel.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
                 } catch (InterruptedException e) {

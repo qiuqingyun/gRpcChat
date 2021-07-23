@@ -17,4 +17,5 @@ message Pack {
   string sender = 2;
   string receiver = 3;
   string message = 4;
+  repeated string stringList = 5;
 }

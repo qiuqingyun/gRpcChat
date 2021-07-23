@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -18,6 +19,8 @@ public class GRpcServer {
     static HashMap<String, StreamObserver<Pack>> register = new HashMap<>();
     private final int port;
     private Server server;
+
+    private enum PostType {typeString, typeRepeatedString}
 
     public GRpcServer(int port) {
         this.port = port;
@@ -65,7 +68,7 @@ public class GRpcServer {
                 @Override
                 public void onNext(Pack value) {
                     String message = "";
-                    boolean sendFlag=true;
+                    PostType postType = PostType.typeString;
                     boolean completeFlag = false;
                     String act = value.getAct();
                     switch (act) {
@@ -76,35 +79,51 @@ public class GRpcServer {
                                 logger.info("New user " + value.getSender() + " login");
                             } else {
                                 message = "Username conflict";
-                                completeFlag=true;
+                                completeFlag = true;
                             }
                         }
-                        case "#logout"->{//登出
+                        case "#logout" -> {//登出
                             logger.info("User " + value.getSender() + " logout");
                             register.remove(value.getSender());//从记录中移除
                             message = "Logout successful";
-                            completeFlag=true;
+                            completeFlag = true;
                         }
                         case "#post" -> {//发送信息
-                            if (register.containsKey(value.getReceiver())) {
+                            if (register.containsKey(value.getReceiver())) {//检查接收对象是否在线
                                 StreamObserver<Pack> userForwardTo = register.get(value.getReceiver());
                                 userForwardTo.onNext(value);
                                 message = "Sent";
-                                logger.info(value.getSender() + " -> " + value.getReceiver() + ": [" + value.getMessage()+"]");
+                                logger.info(value.getSender() + " -> " + value.getReceiver() + ": [" + value.getMessage() + "]");
                             } else {
                                 message = "No such user";
                             }
                         }
+                        case "#loadUserList" -> {//查看在线用户名单
+                            postType = PostType.typeRepeatedString;
+                            message = "Online User List";
+                        }
                     }
-                    if (sendFlag) {
-                        Pack responsePack = Pack.newBuilder()
-                                .setAct("ServerResponse").setMessage(message)
-                                .setSender("Server").setReceiver(value.getSender())
-                                .build();
-                        responseObserver.onNext(responsePack);
-                        if(completeFlag)
-                            responseObserver.onCompleted();
+                    Pack responsePack = null;
+                    switch (postType) {
+                        case typeString -> {//传输内容为一条字符串
+                            responsePack = Pack.newBuilder()
+                                    .setAct("SR_String").setMessage(message)
+                                    .setSender("Server").setReceiver(value.getSender())
+                                    .build();
+                        }
+                        case typeRepeatedString -> {//传输内容为一个字符串数组
+                            Pack.Builder responsePackBuilder = Pack.newBuilder();
+                            responsePackBuilder.setAct("SR_RepeatedString").setMessage(message).setSender("Server").setReceiver(value.getSender());
+                            int index = 5;
+                            for (HashMap.Entry<String, StreamObserver<Pack>> entry : register.entrySet()) {//遍历register
+                                responsePackBuilder.addStringList(entry.getKey());
+                            }
+                            responsePack = responsePackBuilder.build();
+                        }
                     }
+                    responseObserver.onNext(responsePack);
+                    if (completeFlag)
+                        responseObserver.onCompleted();
                 }
 
                 @Override

@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 
 import org.slf4j.Logger;
 
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
 public class GRpcClient {
@@ -15,7 +16,7 @@ public class GRpcClient {
     private final StringMessageGrpc.StringMessageStub asyncStub;
     private final String name;
     private final StreamObserver<Pack> requestObserver;
-    private CountDownLatch finishLatch =null;
+    private CountDownLatch finishLatch = null;
 
     /**
      * Construct client for accessing HelloWorld server using the existing channel.
@@ -32,9 +33,20 @@ public class GRpcClient {
                         new StreamObserver<>() {
                             @Override
                             public void onNext(Pack value) {
-                                if(value.getMessage().compareTo("Login successful")==0)
-                                    logger.info("Login");
                                 System.out.print("\rFrom [" + value.getSender() + "]: Message [" + value.getMessage() + "]  \nSend(#act/Name@Message): ");
+                                switch (value.getAct()) {
+                                    case "SR_RepeatedString" -> {
+                                        List<String> list = value.getStringListList();
+                                        int listSize = value.getStringListCount();
+                                        System.out.println("\r + User List                                          ");
+                                        for (int i = 0; i < listSize; ++i)
+                                            System.out.println(" | User " + (i + 1) + ": " + value.getStringList(i));
+                                        System.out.println(" + End of the User List\n");
+                                    }
+                                    default -> {
+
+                                    }
+                                }
                                 finishLatch.countDown();
                             }
 
@@ -46,7 +58,7 @@ public class GRpcClient {
 
                             @Override
                             public void onCompleted() {
-                                logger.info("Logout");
+                                System.out.print("\r                                           ");
                                 finishLatch.countDown();
                             }
                         }
@@ -72,7 +84,8 @@ public class GRpcClient {
     }
 
     //登录
-    public CountDownLatch login(){
+    public CountDownLatch login() {
+        logger.info("Login");
         finishLatch = new CountDownLatch(1);
         try {
             Pack request = Pack.newBuilder()
@@ -89,11 +102,29 @@ public class GRpcClient {
     }
 
     //登出
-    public CountDownLatch logout(){
+    public CountDownLatch logout() {
+        logger.info("Logout");
         finishLatch = new CountDownLatch(1);
         try {
             Pack request = Pack.newBuilder()
                     .setAct("#logout").setMessage(new java.util.Date().toString())
+                    .setSender(this.name).setReceiver("Server")
+                    .build();
+            requestObserver.onNext(request);
+        } catch (RuntimeException e) {
+            // Cancel RPC
+            requestObserver.onError(e);
+            throw e;
+        }
+        return finishLatch;
+    }
+
+    //加载在线用户名单
+    public CountDownLatch loadUserList() {
+        finishLatch = new CountDownLatch(1);
+        try {
+            Pack request = Pack.newBuilder()
+                    .setAct("#loadUserList").setMessage(new java.util.Date().toString())
                     .setSender(this.name).setReceiver("Server")
                     .build();
             requestObserver.onNext(request);
