@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "org.gRpcChat";
+option java_outer_classname = "StringMessageProto";
+
+package StringMessage;
+
+service StringMessage {
+  rpc postPackage (stream Pack) returns (stream Pack) {}
+}
+
+// 客户端给服务器发送的消息：登录，发送消息，消息接收结果
+//服务器给客户端推送的消息：登录结果( to 请求登录的客户端)，推送消息( to 接收消息的客户端)，推送消息结果( to 发送消息的客户端)
+message Pack {
+  string act = 1;
+  string sender = 2;
+  string receiver = 3;
+  string message = 4;
+}
