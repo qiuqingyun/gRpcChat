@@ -18,13 +18,7 @@ public class GRpcClient {
     private final StreamObserver<Pack> requestObserver;
     private CountDownLatch finishLatch = null;
 
-    /**
-     * Construct client for accessing HelloWorld server using the existing channel.
-     */
     public GRpcClient(Channel channel, String name) {
-        // 'channel' here is a Channel, not a ManagedChannel, so it is not this code's responsibility to
-        // shut it down.
-        // Passing Channels to code makes code easier to test and makes it easier to reuse Channels.
         blockingStub = StringMessageGrpc.newBlockingStub(channel);
         asyncStub = StringMessageGrpc.newStub(channel);
         this.name = name;
@@ -89,7 +83,7 @@ public class GRpcClient {
         finishLatch = new CountDownLatch(1);
         try {
             Pack request = Pack.newBuilder()
-                    .setAct("#login").setMessage(new java.util.Date().toString())
+                    .setAct("#login").setMessage(GRpcUtil.getTimeStamp())
                     .setSender(this.name).setReceiver("Server")
                     .build();
             requestObserver.onNext(request);
@@ -107,7 +101,7 @@ public class GRpcClient {
         finishLatch = new CountDownLatch(1);
         try {
             Pack request = Pack.newBuilder()
-                    .setAct("#logout").setMessage(new java.util.Date().toString())
+                    .setAct("#logout").setMessage(GRpcUtil.getTimeStamp())
                     .setSender(this.name).setReceiver("Server")
                     .build();
             requestObserver.onNext(request);
@@ -124,7 +118,7 @@ public class GRpcClient {
         finishLatch = new CountDownLatch(1);
         try {
             Pack request = Pack.newBuilder()
-                    .setAct("#loadUserList").setMessage(new java.util.Date().toString())
+                    .setAct("#loadUserList").setMessage(GRpcUtil.getTimeStamp())
                     .setSender(this.name).setReceiver("Server")
                     .build();
             requestObserver.onNext(request);
