@@ -14,10 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import org.slf4j.Logger;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.*;
@@ -70,11 +67,11 @@ public class GRpcClient {
                                         }
                                     }
                                     //接收用户登录消息
-                                    case "SP_loginMsg"->{
+                                    case "SP_loginMsg" -> {
                                         userList.put(value.getUserInfoList(0).getName(), value.getUserInfoList(0).getPk());//本地保存在线用户的公钥
                                     }
                                     //接收用户下线消息
-                                    case "SP_logoutMsg"->{
+                                    case "SP_logoutMsg" -> {
                                         userList.remove(value.getUserInfoList(0).getName(), value.getUserInfoList(0).getPk());//本地保存在线用户的公钥
                                     }
                                     //普通服务器通知
@@ -208,7 +205,14 @@ public class GRpcClient {
         System.out.print(sb);
 
         Scanner scanner = new Scanner(System.in);
-        int inputInt = scanner.nextInt();
+        int inputInt;
+        //输入合法性验证
+        if (scanner.hasNextInt()) {
+            inputInt = scanner.nextInt();
+        } else {
+            inputInt = -1;
+        }
+        //设置接收者
         if (inputInt > 0 && inputInt <= usersCount) {
             this.setReceiver(userNameList.get(inputInt - 1));
             System.out.println("Set Receiver User " + userNameList.get(inputInt - 1) + " Succeeded");
@@ -261,6 +265,12 @@ public class GRpcClient {
         accountInfo.name = name;
         accountInfo.pk = pk;
         accountInfo.sk = sk;
-        accountInfo.skHash = GRpcUtil.SHA256(sk.toString());
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try {
+            CleartextKeysetHandle.write(accountInfo.sk, BinaryKeysetWriter.withOutputStream(baos));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        accountInfo.skHash = GRpcUtil.SHA256(baos.toString());
     }
 }

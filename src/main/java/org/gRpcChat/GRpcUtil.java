@@ -1,9 +1,6 @@
 package org.gRpcChat;
 
-import com.google.crypto.tink.CleartextKeysetHandle;
-import com.google.crypto.tink.JsonKeysetReader;
-import com.google.crypto.tink.JsonKeysetWriter;
-import com.google.crypto.tink.KeysetHandle;
+import com.google.crypto.tink.*;
 import com.google.crypto.tink.proto.KeyData;
 import com.google.crypto.tink.proto.Keyset;
 import com.google.protobuf.ByteString;
@@ -77,17 +74,20 @@ public class GRpcUtil {
         return null;
     }
 
+    //从KeysetHandle格式获取ByteString格式公钥
     public static ByteString getKeyByteString(KeysetHandle keysetHandle) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        CleartextKeysetHandle.write(keysetHandle, JsonKeysetWriter.withOutputStream(baos));
+        CleartextKeysetHandle.write(keysetHandle, BinaryKeysetWriter.withOutputStream(baos));
         return ByteString.copyFrom(baos.toByteArray());
     }
 
+    //从ByteString格式恢复KeysetHandle格式公钥
     public static KeysetHandle getKeyKeysetHandle(ByteString key) throws GeneralSecurityException, IOException {
         ByteArrayInputStream bais = new ByteArrayInputStream(key.toByteArray());
-        return CleartextKeysetHandle.read(JsonKeysetReader.withInputStream(bais));
+        return CleartextKeysetHandle.read(BinaryKeysetReader.withInputStream(bais));
     }
 
+    //将String转换为ByteString格式
     public static ByteString toByteString(String string) {
         return ByteString.copyFrom(string.getBytes(StandardCharsets.UTF_8));
     }

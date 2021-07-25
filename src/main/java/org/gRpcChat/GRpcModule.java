@@ -1,7 +1,6 @@
 package org.gRpcChat;
 
-import com.google.crypto.tink.KeyTemplates;
-import com.google.crypto.tink.KeysetHandle;
+import com.google.crypto.tink.*;
 import com.google.crypto.tink.aead.AeadConfig;
 import com.google.crypto.tink.config.TinkConfig;
 import com.google.crypto.tink.hybrid.HybridConfig;
@@ -13,6 +12,7 @@ import org.apache.commons.cli.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -29,6 +29,8 @@ public class GRpcModule {
         options.addOption(Option.builder("s").longOpt("server").desc("Server mode").build());
         //用户名
         options.addOption(Option.builder("n").longOpt("name").hasArg().desc("Account name").build());
+        //密钥
+        options.addOption(Option.builder("k").longOpt("key").hasArg().desc("Account key").build());
         //RPC端口
         options.addOption(Option.builder("p").longOpt("port").hasArg().desc("Connect port").build());
         //帮助信息
@@ -91,17 +93,44 @@ public class GRpcModule {
             }
             System.out.println("Account name: " + name);
             logger.info("Account name: " + name);
-            //生成随机密钥
+            //确定密钥
             KeysetHandle sk = null, pk = null;
             try {
                 HybridConfig.register();
-                sk = KeysetHandle.generateNew(KeyTemplates.get("ECIES_P256_COMPRESSED_HKDF_HMAC_SHA256_AES128_GCM"));//私钥
-                pk = sk.getPublicKeysetHandle();//公钥
             } catch (GeneralSecurityException e) {
+                System.out.println("KeyGen Initialization Failed");
                 e.printStackTrace();
-                logger.error("KeyGen Error");
                 System.exit(1);
             }
+            if (result.hasOption("k")) {
+                try {//导入密钥
+                    sk = CleartextKeysetHandle.read(BinaryKeysetReader.withFile(new File(result.getOptionValue("k"))));//私钥
+                    pk = sk.getPublicKeysetHandle();//公钥
+                } catch (GeneralSecurityException e) {
+                    System.out.println("General Key \"" + result.getOptionValue("k") + "\" Failed");
+                    System.exit(1);
+                } catch (IOException e) {
+                    System.out.println("Key File \"" + result.getOptionValue("k") + "\" Not Found");
+                    System.exit(1);
+                }
+            } else {
+                //生成随机密钥
+                try {
+                    sk = KeysetHandle.generateNew(KeyTemplates.get("ECIES_P256_COMPRESSED_HKDF_HMAC_SHA256_AES128_GCM"));//私钥
+                    pk = sk.getPublicKeysetHandle();//公钥
+                } catch (GeneralSecurityException e) {
+                    e.printStackTrace();
+                    logger.error("KeyGen Error");
+                    System.exit(1);
+                }
+                //保存密钥
+                try {
+                    CleartextKeysetHandle.write(sk, BinaryKeysetWriter.withFile(new File(name + ".key")));
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+
             //确定服务器rpc端口
             int portConnect = 50000;
             if (result.hasOption("p")) {
