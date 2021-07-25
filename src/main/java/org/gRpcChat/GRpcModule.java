@@ -26,13 +26,15 @@ public class GRpcModule {
     public static void main(String[] args) throws InterruptedException {
         Options options = new Options();
         //服务器模式
-        options.addOption(Option.builder("s").longOpt("server").desc("Server mode").build());
-        //用户名
-        options.addOption(Option.builder("n").longOpt("name").hasArg().desc("Account name").build());
-        //密钥
-        options.addOption(Option.builder("k").longOpt("key").hasArg().desc("Account key").build());
+        options.addOption(Option.builder("s").longOpt("server").desc("Server mode [default: closed]").build());
+        //服务器地址
+        options.addOption(Option.builder("i").longOpt("ip").hasArg().desc("Connect ip [default: 127.0.0.1]").build());
         //RPC端口
-        options.addOption(Option.builder("p").longOpt("port").hasArg().desc("Connect port").build());
+        options.addOption(Option.builder("p").longOpt("port").hasArg().desc("Connect port [default: 50000]").build());
+        //用户名
+        options.addOption(Option.builder("n").longOpt("name").hasArg().desc("Account name [default: Random Generation]").build());
+        //密钥
+        options.addOption(Option.builder("k").longOpt("key").hasArg().desc("Account key file path [default: Random Generation]").build());
         //帮助信息
         options.addOption(Option.builder("h").longOpt("help").desc("Print this help message").build());
 
@@ -48,7 +50,7 @@ public class GRpcModule {
             result = parser.parse(options, args);
         } catch (ParseException e) {
             // 打印帮助信息
-            formatter.printHelp("GRpcModule", options, true);
+            formatter.printHelp("gRpcChat", options, true);
             // 打印解析异常
             System.err.println(e.getMessage());
             // 退出程序，退出码为 1
@@ -129,8 +131,13 @@ public class GRpcModule {
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
+                logger.info("Key File \"" + name + ".key\" Saved");
             }
-
+            //确定服务器ip
+            String ipConnect = "127.0.0.1";
+            if (result.hasOption("i")) {
+                ipConnect = result.getOptionValue("i");
+            }
             //确定服务器rpc端口
             int portConnect = 50000;
             if (result.hasOption("p")) {
@@ -140,9 +147,11 @@ public class GRpcModule {
             String finalName = name;
             KeysetHandle finalPk = pk;
             KeysetHandle finalSk = sk;
+            String finalIpConnect = ipConnect;
             int finalPortConnect = portConnect;
             Thread threadClient = new Thread(() -> {
-                String target = "localhost:" + finalPortConnect;
+                String target = finalIpConnect + ":" + finalPortConnect;
+                logger.info("Connect to " + target);
                 // 与服务器连接的通道
                 ManagedChannel channel = ManagedChannelBuilder.forTarget(target).usePlaintext().build();
                 GRpcClient client = new GRpcClient(channel);
@@ -153,7 +162,12 @@ public class GRpcModule {
                     if (!finishLatch.await(1, TimeUnit.MINUTES)) {
                         logger.warn("Login can not finish within 1 minutes");
                     }
-                    logger.info("Login successful");
+                    if (client.isLoginSuccessful()) {
+                        logger.info("Login Successful");
+                    } else {
+                        logger.info("Login Failed");
+                        System.exit(1);
+                    }
                 } catch (InterruptedException e) {
                     logger.warn("Login failed.");
                     e.printStackTrace();

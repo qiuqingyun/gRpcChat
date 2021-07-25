@@ -28,7 +28,8 @@ public class GRpcClient {
     private CountDownLatch finishLatch = null;
     private HashMap<String, ByteString> userList = new HashMap<>();
     private Receiver receiver = new Receiver();
-    byte[] contextInfo = new byte[0];
+    private byte[] contextInfo = new byte[0];
+    private boolean loginSuccessful = false;
 
     //初始化
     public GRpcClient(Channel channel) {
@@ -59,6 +60,8 @@ public class GRpcClient {
                                     }
                                     //接收在线用户列表
                                     case "SR_UserList" -> {
+                                        if (value.getMessage().toStringUtf8().equals("Login Successful"))
+                                            loginSuccessful = true;
                                         System.out.println("\rNotice: [" + value.getMessage().toStringUtf8() + "]");
                                         userList.clear();
                                         int listSize = value.getUserInfoListCount();
@@ -272,5 +275,9 @@ public class GRpcClient {
             e.printStackTrace();
         }
         accountInfo.skHash = GRpcUtil.SHA256(baos.toString());
+    }
+
+    public boolean isLoginSuccessful() {
+        return loginSuccessful;
     }
 }
