@@ -23,6 +23,8 @@ dependencies {
     compile 'net.devh:grpc-spring-boot-starter:2.12.0.RELEASE'
     // https://mvnrepository.com/artifact/commons-cli/commons-cli
     implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
+    // https://mvnrepository.com/artifact/com.google.crypto.tink/tink
+    implementation group: 'com.google.crypto.tink', name: 'tink', version: '1.6.1'
 
 }
 

@@ -4,6 +4,8 @@ option java_multiple_files = true;
 option java_package = "org.gRpcChat";
 option java_outer_classname = "StringMessageProto";
 
+import "google/protobuf/any.proto";
+
 package StringMessage;
 
 service StringMessage {
@@ -16,6 +18,58 @@ message Pack {
   string act = 1;
   string sender = 2;
   string receiver = 3;
-  string message = 4;
-  repeated string stringList = 5;
+  bytes message = 4;
+  repeated UserInfoPack userInfoList = 5;
 }
+
+//传递用户信息的包
+message UserInfoPack{
+  string name = 1;
+  bytes pk = 2;
+  optional string skHash = 3;
+}
+//
+////传递公钥的包
+//message Key {
+//  message KeyData {
+//    // Required.
+//    string type_url = 1;  // In format type.googleapis.com/packagename.messagename
+//    // Required.
+//    // Contains specific serialized *Key proto
+//    bytes value = 2;  // placeholder for ctype
+//    enum KeyMaterialType {
+//      UNKNOWN_KEYMATERIAL = 0;
+//      SYMMETRIC = 1;
+//      ASYMMETRIC_PRIVATE = 2;
+//      ASYMMETRIC_PUBLIC = 3;
+//      REMOTE = 4;  // points to a remote key, i.e., in a KMS.
+//    }
+//    // Required.
+//    KeyMaterialType key_material_type = 3;
+//  }
+//  // Contains the actual, instantiation specific key proto.
+//  // By convention, each key proto contains a version field.
+//  KeyData key_data = 1;
+//  enum KeyStatusType {
+//    UNKNOWN_STATUS = 0;
+//    ENABLED = 1;    // Can be used for crypto operations.
+//    DISABLED = 2;   // Cannot be used, but exists and can become ENABLED.
+//    DESTROYED = 3;  // Key data does not exist in this Keyset any more.
+//  }
+//  KeyStatusType status = 2;
+//
+//  // Identifies a key within a keyset, is a part of metadata
+//  // of a ciphertext/signature.
+//  uint32 key_id = 3;
+//
+//  enum OutputPrefixType {
+//    UNKNOWN_PREFIX = 0;
+//    TINK = 1;
+//    LEGACY = 2;
+//    RAW = 3;
+//    CRUNCHY = 4;
+//  }
+//  // Determines the prefix of the ciphertexts/signatures produced by this key.
+//  // This value is copied verbatim from the key template.
+//  OutputPrefixType output_prefix_type = 4;
+//}

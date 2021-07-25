@@ -1,5 +1,11 @@
 package org.gRpcChat;
 
+import com.google.crypto.tink.KeyTemplates;
+import com.google.crypto.tink.KeysetHandle;
+import com.google.crypto.tink.aead.AeadConfig;
+import com.google.crypto.tink.config.TinkConfig;
+import com.google.crypto.tink.hybrid.HybridConfig;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.TextFormat;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
@@ -9,8 +15,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Random;
-import java.util.Scanner;
+import java.security.GeneralSecurityException;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -22,11 +28,9 @@ public class GRpcModule {
         //服务器模式
         options.addOption(Option.builder("s").longOpt("server").desc("Server mode").build());
         //用户名
-        options.addOption(Option.builder("n").longOpt("name").hasArg().desc("User name").build());
-        //服务监听端口
-        options.addOption(Option.builder("p").longOpt("port").hasArg().desc("Service listening port").build());
-        //服务器连接端口
-        options.addOption(Option.builder("c").longOpt("connect").hasArg().desc("Server connect port").build());
+        options.addOption(Option.builder("n").longOpt("name").hasArg().desc("Account name").build());
+        //RPC端口
+        options.addOption(Option.builder("p").longOpt("port").hasArg().desc("Connect port").build());
         //帮助信息
         options.addOption(Option.builder("h").longOpt("help").desc("Print this help message").build());
 
@@ -56,9 +60,9 @@ public class GRpcModule {
             // 退出程序
             System.exit(0);
         }
+
         //设置服务监听端口
-        Random random = new Random();
-        int portListening = 40000 + random.nextInt(9999) + 1;
+        int portListening = 50000;
         if (result.hasOption("p")) {
             portListening = Integer.parseInt(result.getOptionValue("p"));
         }
@@ -80,64 +84,98 @@ public class GRpcModule {
             threadServer.join();
         } else {
             logger.info("Running in client mode");
-            //Client线程
-            String name = "Anonymous";
+            //确定用户名
+            String name = GRpcUtil.getRandomString(6);
             if (result.hasOption("n")) {
                 name = result.getOptionValue("n");
             }
-            int portConnect = 50000;
-            if (result.hasOption("c")) {
-                portConnect = Integer.parseInt(result.getOptionValue("c"));
+            System.out.println("Account name: " + name);
+            logger.info("Account name: " + name);
+            //生成随机密钥
+            KeysetHandle sk = null, pk = null;
+            try {
+                HybridConfig.register();
+                sk = KeysetHandle.generateNew(KeyTemplates.get("ECIES_P256_COMPRESSED_HKDF_HMAC_SHA256_AES128_GCM"));//私钥
+                pk = sk.getPublicKeysetHandle();//公钥
+            } catch (GeneralSecurityException e) {
+                e.printStackTrace();
+                logger.error("KeyGen Error");
+                System.exit(1);
             }
+            //确定服务器rpc端口
+            int portConnect = 50000;
+            if (result.hasOption("p")) {
+                portConnect = Integer.parseInt(result.getOptionValue("p"));
+            }
+            //创建Client线程
             String finalName = name;
+            KeysetHandle finalPk = pk;
+            KeysetHandle finalSk = sk;
             int finalPortConnect = portConnect;
             Thread threadClient = new Thread(() -> {
                 String target = "localhost:" + finalPortConnect;
-                // 与服务器连接的通道（明文）
+                // 与服务器连接的通道
                 ManagedChannel channel = ManagedChannelBuilder.forTarget(target).usePlaintext().build();
-                GRpcClient client = new GRpcClient(channel, finalName);
-
+                GRpcClient client = new GRpcClient(channel);
+                client.setAccountInfo(finalName, finalPk, finalSk);
                 //登录
                 try {
                     CountDownLatch finishLatch = client.login();
                     if (!finishLatch.await(1, TimeUnit.MINUTES)) {
                         logger.warn("Login can not finish within 1 minutes");
                     }
+                    logger.info("Login successful");
                 } catch (InterruptedException e) {
                     logger.warn("Login failed.");
                     e.printStackTrace();
                 }
-                Scanner scanner = new Scanner(System.in);
+                logger.info("Receiver: #Everyone");
                 //循环，直到输入#logout
                 boolean completeFlag = false;
                 do {
+                    Scanner scanner = new Scanner(System.in);
                     //发送消息
-                    System.out.print("\rSend(#act/Name@Message): ");
+                    if (client.getReceiver() != null)
+                        System.out.print("Send to [" + client.getReceiver() + "]: ");
+                    else
+                        System.out.print("Send to [#Everyone]:");
                     String inputStr = scanner.nextLine();
                     String warnMessage = null;
                     CountDownLatch finishLatch = null;
+                    boolean awaitFlag = true;
                     try {
-                        switch (inputStr) {
-                            case "#logout" -> {//登出
-                                finishLatch = client.logout();
-                                warnMessage = "Logout";
-                                completeFlag = true;
-                            }
-                            case "#loadUserList" -> {
-                                finishLatch = client.loadUserList();
-                                warnMessage = "Load user list";
-                            }
-                            default -> {
-                                if (inputStr.contains("#") && inputStr.contains("/") && inputStr.contains("@")) {//发送信息模式
-                                    finishLatch = client.post(inputStr.split("/")[0], inputStr.split("/")[1].split("@")[0], inputStr.split("/")[1].split("@")[1]);
-                                    warnMessage = "Post message";
-                                } else {
-                                    finishLatch = new CountDownLatch(0);
-                                    System.out.println("Format error");
+                        //其他功能
+                        if ("#function".equals(inputStr)) {
+                            GRpcUtil.printFunctions();
+                            inputStr = scanner.nextLine();
+
+                            switch (inputStr) {
+                                case "logout" -> {//登出
+                                    warnMessage = "Logout";
+                                    finishLatch = client.logout();
+                                    completeFlag = true;
+                                }
+                                case "userlist" -> {//加载在线用户列表
+                                    warnMessage = "Load user list";
+                                    awaitFlag = false;
+                                    client.showUserList();
+                                }
+                                case "setreceiver" -> {//设置接收者
+                                    warnMessage = "Set target";
+                                    awaitFlag = false;
+                                    client.setReceiver();
+                                }
+                                default -> {
+                                    System.out.println("Format Error");
+                                    awaitFlag = false;
                                 }
                             }
+                        } else {//发送信息
+                            warnMessage = "Post message";
+                            finishLatch = client.post(inputStr);
                         }
-                        if (!finishLatch.await(1, TimeUnit.MINUTES)) {
+                        //等待同步
+                        if (awaitFlag && (!finishLatch.await(1, TimeUnit.MINUTES))) {
                             logger.warn(warnMessage + " can not finish within 1 minutes");
                         }
                     } catch (InterruptedException e) {
@@ -145,6 +183,7 @@ public class GRpcModule {
                         e.printStackTrace();
                     }
                 } while (!completeFlag);
+
                 try {
                     channel.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
                 } catch (InterruptedException e) {

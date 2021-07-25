@@ -1,5 +1,6 @@
 package org.gRpcChat;
 
+import com.google.crypto.tink.KeysetHandle;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.stub.StreamObserver;
@@ -7,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.sql.Struct;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -16,11 +18,11 @@ import java.util.concurrent.TimeUnit;
  */
 public class GRpcServer {
     private final static Logger logger = LoggerFactory.getLogger(GRpcServer.class.getName());
-    static HashMap<String, StreamObserver<Pack>> register = new HashMap<>();
+    static HashMap<String, UserInfo> register = new HashMap<>();
     private final int port;
     private Server server;
 
-    private enum PostType {typeString, typeRepeatedString}
+    private enum PostType {typeString, typeRepeated}
 
     public GRpcServer(int port) {
         this.port = port;
@@ -28,6 +30,7 @@ public class GRpcServer {
 
     //启动Server
     public void start() throws IOException {
+        register.put("#Everyone", new UserInfo());
         server = ServerBuilder.forPort(port)
                 .addService(new StringMessageImpl())
                 .build()
@@ -71,52 +74,122 @@ public class GRpcServer {
                     PostType postType = PostType.typeString;
                     boolean completeFlag = false;
                     String act = value.getAct();
+                    //服务器动作
                     switch (act) {
-                        case "#login" -> {//登录
+                        //收到用户登录消息
+                        case "#login" -> {
                             if (!register.containsKey(value.getSender())) {//登录
-                                register.put(value.getSender(), responseObserver);
-                                message = "Login successful";
-                                logger.info("New user " + value.getSender() + " login");
+                                postType = PostType.typeRepeated;
+                                //保存用户信息
+                                UserInfo newUserInfo = new UserInfo();
+                                newUserInfo.name = value.getUserInfoList(0).getName();
+                                newUserInfo.pk = value.getUserInfoList(0).getPk();
+                                newUserInfo.skHash = value.getUserInfoList(0).getSkHash();
+                                newUserInfo.stream = responseObserver;
+                                register.put(newUserInfo.name, newUserInfo);
+                                message = "Login Successful";
+                                logger.info("User " + newUserInfo.name + " Login");
+                                //广播用户登录消息
+                                UserInfoPack userInfoPack = UserInfoPack.newBuilder()
+                                        .setName(newUserInfo.name).setPk(newUserInfo.pk)
+                                        .build();
+                                for (HashMap.Entry<String, UserInfo> user : register.entrySet()) {//遍历register
+                                    if (user.getKey().equals("#Everyone") || user.getKey().equals(newUserInfo.name))
+                                        continue;
+                                    UserInfo userInfo = user.getValue();
+                                    Pack loginMsgPack = Pack.newBuilder().setAct("SP_loginMsg")
+                                            .setSender("Server").setReceiver(user.getKey())
+                                            .setMessage(GRpcUtil.toByteString(newUserInfo.name))
+                                            .addUserInfoList(userInfoPack).build();
+                                    userInfo.stream.onNext(loginMsgPack);//向某个在线用户发送群发消息
+                                }
                             } else {
-                                message = "Username conflict";
+                                message = "Login Failed: Account name has been used";
                                 completeFlag = true;
                             }
                         }
-                        case "#logout" -> {//登出
-                            logger.info("User " + value.getSender() + " logout");
-                            register.remove(value.getSender());//从记录中移除
-                            message = "Logout successful";
+                        //收到用户下线消息
+                        case "#logout" -> {
+                            for (HashMap.Entry<String, UserInfo> user : register.entrySet()) {//遍历register
+                                if (user.getKey().equals("#Everyone"))
+                                    continue;
+                                if (user.getValue().stream.equals(responseObserver)) {
+                                    logger.info("User " + user.getKey() + " logout");
+                                    register.remove(user.getKey());//从记录中移除
+                                    //广播用户下线消息
+                                    UserInfoPack userInfoPack = UserInfoPack.newBuilder()
+                                            .setName(user.getValue().name).setPk(user.getValue().pk)
+                                            .build();
+                                    for (HashMap.Entry<String, UserInfo> entry : register.entrySet()) {//遍历register
+                                        if (entry.getKey().equals("#Everyone"))
+                                            continue;
+                                        UserInfo userInfo = entry.getValue();
+                                        Pack loginMsgPack = Pack.newBuilder().setAct("SP_logoutMsg")
+                                                .setSender("Server").setReceiver(entry.getKey())
+                                                .setMessage(GRpcUtil.toByteString(user.getValue().name))
+                                                .addUserInfoList(userInfoPack).build();
+                                        userInfo.stream.onNext(loginMsgPack);//向某个在线用户发送群发消息
+                                    }
+                                    break;
+                                }
+                            }
+                            message = "Logout Successful";
                             completeFlag = true;
                         }
-                        case "#post" -> {//发送信息
+                        //转发用户发送的信息
+                        case "#post" -> {
                             if (register.containsKey(value.getReceiver())) {//检查接收对象是否在线
-                                StreamObserver<Pack> userForwardTo = register.get(value.getReceiver());
-                                userForwardTo.onNext(value);
-                                message = "Sent";
-                                logger.info(value.getSender() + " -> " + value.getReceiver() + ": [" + value.getMessage() + "]");
+                                UserInfo userForwardTo = register.get(value.getReceiver());
+                                Pack forwardPack = Pack.newBuilder().setAct("SP_forward")
+                                        .setSender(value.getSender()).setReceiver(value.getReceiver())
+                                        .setMessage(value.getMessage()).build();
+                                userForwardTo.stream.onNext(forwardPack);//直接转给收件方
+                                message = "Send Successful";
+                                logger.info("Private Chat: " + value.getSender() + " -> " + value.getReceiver());
                             } else {
-                                message = "No such user";
+                                message = "Send Failed: User " + value.getReceiver() + " is offline";
                             }
                         }
-                        case "#loadUserList" -> {//查看在线用户名单
-                            postType = PostType.typeRepeatedString;
-                            message = "Online User List";
+                        //转发用户群发的消息
+                        case "#broadcast" -> {
+                            StringBuffer sb = new StringBuffer("Broadcast:    " + value.getSender() + " -> ");
+                            for (HashMap.Entry<String, UserInfo> entry : register.entrySet()) {//遍历register
+                                if (entry.getKey().equals("#Everyone"))
+                                    continue;
+                                UserInfo userForwardTo = entry.getValue();
+                                Pack forwardPack = Pack.newBuilder().setAct("SP_broadcast")
+                                        .setSender(value.getSender()).setReceiver(entry.getKey())
+                                        .setMessage(value.getMessage()).build();
+                                userForwardTo.stream.onNext(forwardPack);//向某个在线用户发送群发消息
+                                sb.append(entry.getKey()).append("; ");
+                            }
+                            logger.info(sb.toString());
+                            message = "Broadcast Successful";
                         }
                     }
                     Pack responsePack = null;
+                    //服务器响应
                     switch (postType) {
-                        case typeString -> {//传输内容为一条字符串
+                        //发送普通通知
+                        case typeString -> {
                             responsePack = Pack.newBuilder()
-                                    .setAct("SR_String").setMessage(message)
+                                    .setAct("SR_String").setMessage(GRpcUtil.toByteString(message))
                                     .setSender("Server").setReceiver(value.getSender())
                                     .build();
                         }
-                        case typeRepeatedString -> {//传输内容为一个字符串数组
+                        //发送在线成员信息数组
+                        case typeRepeated -> {
                             Pack.Builder responsePackBuilder = Pack.newBuilder();
-                            responsePackBuilder.setAct("SR_RepeatedString").setMessage(message).setSender("Server").setReceiver(value.getSender());
-                            int index = 5;
-                            for (HashMap.Entry<String, StreamObserver<Pack>> entry : register.entrySet()) {//遍历register
-                                responsePackBuilder.addStringList(entry.getKey());
+                            responsePackBuilder.setAct("SR_UserList").setMessage(GRpcUtil.toByteString(message))
+                                    .setSender("Server").setReceiver(value.getSender());
+                            for (HashMap.Entry<String, UserInfo> entry : register.entrySet()) {//遍历register
+                                //填充用户的姓名与公钥
+                                if (entry.getKey().equals("#Everyone"))
+                                    continue;
+                                UserInfoPack userInfoPack = UserInfoPack.newBuilder()
+                                        .setName(entry.getValue().name).setPk(entry.getValue().pk)
+                                        .build();
+                                responsePackBuilder.addUserInfoList(userInfoPack);
                             }
                             responsePack = responsePackBuilder.build();
                         }
@@ -128,7 +201,29 @@ public class GRpcServer {
 
                 @Override
                 public void onError(Throwable t) {
-                    logger.error("Post Package Error.");
+                    for (HashMap.Entry<String, UserInfo> user : register.entrySet()) {//遍历register
+                        if (user.getKey().equals("#Everyone"))
+                            continue;
+                        if (user.getValue().stream.equals(responseObserver)) {
+                            logger.error("User " + user.getKey() + " Disconnected");
+                            register.remove(user.getKey());//从记录中移除
+                            //广播用户下线消息
+                            UserInfoPack userInfoPack = UserInfoPack.newBuilder()
+                                    .setName(user.getValue().name).setPk(user.getValue().pk)
+                                    .build();
+                            for (HashMap.Entry<String, UserInfo> entry : register.entrySet()) {//遍历register
+                                if (entry.getKey().equals("#Everyone"))
+                                    continue;
+                                UserInfo userInfo = entry.getValue();
+                                Pack loginMsgPack = Pack.newBuilder().setAct("SP_logoutMsg")
+                                        .setSender("Server").setReceiver(entry.getKey())
+                                        .setMessage(GRpcUtil.toByteString(user.getValue().name))
+                                        .addUserInfoList(userInfoPack).build();
+                                userInfo.stream.onNext(loginMsgPack);//向某个在线用户发送群发消息
+                            }
+                            break;
+                        }
+                    }
                 }
 
                 @Override
