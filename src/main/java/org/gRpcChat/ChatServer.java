@@ -22,9 +22,9 @@ public class ChatServer {
     public void run() throws InterruptedException {
         logger.info("Running in server mode");
         Thread threadServer = new Thread(() -> {
-            final GRpcServer server = new GRpcServer(portListening);
+            final GRpcServer server = new GRpcServer();
             try {
-                server.start();
+                server.start(portListening);
                 server.blockUntilShutdown();
             } catch (IOException | InterruptedException e) {
                 logger.error("Server Error: " + e.getMessage());

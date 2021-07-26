@@ -1,12 +1,7 @@
 package org.gRpcChat;
 
 import com.google.crypto.tink.*;
-import com.google.crypto.tink.proto.EciesAeadHkdfPrivateKey;
-import com.google.crypto.tink.proto.EciesAeadHkdfPublicKey;
-import com.google.crypto.tink.proto.KeyData;
-import com.google.crypto.tink.proto.Keyset;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.grpc.Channel;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
@@ -20,20 +15,20 @@ import java.security.GeneralSecurityException;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 
+//Grpc客户端
 public class GRpcClient {
     private final static Logger logger = LoggerFactory.getLogger(GRpcServer.class.getName());
-    private final StringMessageGrpc.StringMessageStub asyncStub;
-    private static Account accountInfo = new Account();//用户信息
+    private static final Account accountInfo = new Account();//用户信息
     private final StreamObserver<Pack> requestObserver;
     private CountDownLatch finishLatch = null;
-    private HashMap<String, ByteString> userList = new HashMap<>();
-    private Receiver receiver = new Receiver();
-    private byte[] contextInfo = new byte[0];
+    private final HashMap<String, ByteString> userList = new HashMap<>();
+    private final Receiver receiver = new Receiver();
+    private final byte[] contextInfo = new byte[0];
     private boolean loginSuccessful = false;
 
     //初始化
     public GRpcClient(Channel channel) {
-        asyncStub = StringMessageGrpc.newStub(channel);
+        StringMessageGrpc.StringMessageStub asyncStub = StringMessageGrpc.newStub(channel);
         requestObserver =
                 asyncStub.postPackage(
                         new StreamObserver<>() {
@@ -228,7 +223,7 @@ public class GRpcClient {
         }
     }
 
-    //接收方
+    //接收方信息
     private static class Receiver {
         public String name = null;
         public KeysetHandle pk = null;
@@ -242,6 +237,7 @@ public class GRpcClient {
         public String skHash = null;
     }
 
+    //设置接收者信息
     private void setReceiver(String name) {
         this.receiver.name = name;
         if (name != null) {
@@ -254,14 +250,11 @@ public class GRpcClient {
             this.receiver.pk = null;
     }
 
+    //获取接收者名称
     public String getReceiver() {
         if (this.receiver.name != null)
             return this.receiver.name;
         return "#Everyone";
-    }
-
-    public HashMap<String, ByteString> getUserList() {
-        return userList;
     }
 
     //设置账户信息(账户名称，公钥，私钥)
@@ -278,6 +271,9 @@ public class GRpcClient {
         accountInfo.skHash = GRpcUtil.SHA256(baos.toString());
     }
 
+    public HashMap<String, ByteString> getUserList() {
+        return userList;
+    }
     public boolean isLoginSuccessful() {
         return loginSuccessful;
     }
