@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "org.gRpcChat";
+option java_outer_classname = "KeyFileStoreProto";
+
+package KeyFileStore;
+
+// 存储身份认证文件
+message KeyFile {
+  string name = 1;
+  bytes key = 2;
+}

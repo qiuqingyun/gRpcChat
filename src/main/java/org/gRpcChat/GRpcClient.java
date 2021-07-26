@@ -97,7 +97,6 @@ public class GRpcClient {
 
                             @Override
                             public void onCompleted() {
-                                System.out.print("\r                                           ");
                                 finishLatch.countDown();
                             }
                         }
@@ -256,7 +255,9 @@ public class GRpcClient {
     }
 
     public String getReceiver() {
-        return this.receiver.name;
+        if (this.receiver.name != null)
+            return this.receiver.name;
+        return "#Everyone";
     }
 
     public HashMap<String, ByteString> getUserList() {

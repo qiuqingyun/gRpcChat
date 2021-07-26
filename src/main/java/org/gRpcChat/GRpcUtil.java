@@ -7,8 +7,12 @@ import com.google.protobuf.ByteString;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -74,14 +78,14 @@ public class GRpcUtil {
         return null;
     }
 
-    //从KeysetHandle格式获取ByteString格式公钥
+    //从KeysetHandle格式获取ByteString格式密钥
     public static ByteString getKeyByteString(KeysetHandle keysetHandle) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         CleartextKeysetHandle.write(keysetHandle, BinaryKeysetWriter.withOutputStream(baos));
         return ByteString.copyFrom(baos.toByteArray());
     }
 
-    //从ByteString格式恢复KeysetHandle格式公钥
+    //从ByteString格式恢复KeysetHandle格式密钥
     public static KeysetHandle getKeyKeysetHandle(ByteString key) throws GeneralSecurityException, IOException {
         ByteArrayInputStream bais = new ByteArrayInputStream(key.toByteArray());
         return CleartextKeysetHandle.read(BinaryKeysetReader.withInputStream(bais));
@@ -90,5 +94,13 @@ public class GRpcUtil {
     //将String转换为ByteString格式
     public static ByteString toByteString(String string) {
         return ByteString.copyFrom(string.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public static void writeBytesToFile(byte[] bFile, String fileDest) throws IOException {
+        Files.write(Paths.get(fileDest), bFile);
+    }
+
+    public static byte[] readBytesFromFile(String filePath) throws IOException {
+        return Files.readAllBytes(new File(filePath).toPath());
     }
 }

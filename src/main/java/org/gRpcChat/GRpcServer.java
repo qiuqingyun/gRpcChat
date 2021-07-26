@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit;
  * Server that manages startup/shutdown of a {@code Greeter} server.
  */
 public class GRpcServer {
-    private final static Logger logger = LoggerFactory.getLogger(GRpcServer.class.getName());
+    private final static Logger logger = LoggerFactory.getLogger("Server");
     static HashMap<String, UserInfo> register = new HashMap<>();
     private final int port;
     private Server server;
@@ -206,7 +206,7 @@ public class GRpcServer {
                         if (user.getKey().equals("#Everyone"))
                             continue;
                         if (user.getValue().stream.equals(responseObserver)) {
-                            logger.error("User " + user.getKey() + " Disconnected");
+                            logger.warn("User " + user.getKey() + " Disconnected");
                             register.remove(user.getKey());//从记录中移除
                             //广播用户下线消息
                             UserInfoPack userInfoPack = UserInfoPack.newBuilder()
