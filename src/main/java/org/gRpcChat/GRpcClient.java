@@ -274,6 +274,7 @@ public class GRpcClient {
     public HashMap<String, ByteString> getUserList() {
         return userList;
     }
+
     public boolean isLoginSuccessful() {
         return loginSuccessful;
     }

@@ -1,8 +1,7 @@
 package org.gRpcChat;
 
 import com.google.crypto.tink.*;
-import com.google.crypto.tink.proto.KeyData;
-import com.google.crypto.tink.proto.Keyset;
+
 import com.google.protobuf.ByteString;
 
 import java.io.ByteArrayInputStream;
@@ -11,7 +10,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;

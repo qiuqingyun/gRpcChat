@@ -108,6 +108,7 @@ public class ChatClient {
                 CountDownLatch finishLatch = client.login();
                 if (!finishLatch.await(1, TimeUnit.MINUTES)) {
                     logger.error("Login can not finish within 1 minutes");
+                    System.err.println("Login can not finish within 1 minutes");
                 }
                 if (client.isLoginSuccessful()) {
                     logger.info("Login");
