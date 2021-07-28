@@ -8,6 +8,6 @@ package KeyFileStore;
 
 // 存储身份认证文件
 message KeyFile {
-  string name = 1;
+  int64 id = 1;
   bytes key = 2;
 }

@@ -370,3 +370,4 @@ fabric.properties
 hs_err_pid*
 
 *.key
+/db/

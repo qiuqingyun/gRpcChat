@@ -22,6 +22,7 @@ public class ChatClient {
     private boolean completeFlag = false;
     private String warnMessage = null;
     private CountDownLatch finishLatch = null;
+    private static boolean keyFileSaveFlag = false;
 
     //初始化
     public ChatClient(CommandLine result) {
@@ -37,10 +38,6 @@ public class ChatClient {
         }
         this.connectTarget = ipConnect + ":" + portConnect;
         logger.info(" - SET Connect Target " + this.connectTarget);
-        //确定用户名
-        if (result.hasOption("n")) {
-            account.name = result.getOptionValue("n");
-        }
         //确定密钥
         try {
             HybridConfig.register();
@@ -53,8 +50,8 @@ public class ChatClient {
             try {//导入密钥
                 String keyStoreFilePath = result.getOptionValue("k");
                 KeyFile keyFile = KeyFile.parseFrom(GRpcUtil.readBytesFromFile(keyStoreFilePath));
+                account.id = keyFile.getId();
                 account.sk = GRpcUtil.getKeyKeysetHandle(keyFile.getKey());//私钥
-                account.name = keyFile.getName();
                 account.pk = account.sk.getPublicKeysetHandle();//公钥
             } catch (GeneralSecurityException e) {
                 logger.error("General Key \"" + result.getOptionValue("k") + "\" Failed: " + e.getMessage());
@@ -64,12 +61,16 @@ public class ChatClient {
                 logger.error("Key File \"" + result.getOptionValue("k") + "\" Error: " + e.getMessage());
                 System.err.println("Key File \"" + result.getOptionValue("k") + "\" Error: " + e.getMessage());
                 System.exit(1);
-            } finally {
-                logger.info(" - Key File \"" + account.name + ".key\" Loaded");
             }
+            logger.info(" - Key File \"" + result.getOptionValue("k") + "\" Loaded");
         } else {
             //生成随机密钥
             try {
+                System.out.print("Set your account name:");
+                Scanner scanner = new Scanner(System.in);
+                String accountName = scanner.nextLine();
+                if (accountName.length() > 0)
+                    account.name = accountName;
                 account.sk = KeysetHandle.generateNew(KeyTemplates.get("ECIES_P256_COMPRESSED_HKDF_HMAC_SHA256_AES128_GCM"));//私钥
                 account.pk = account.sk.getPublicKeysetHandle();//公钥
             } catch (GeneralSecurityException e) {
@@ -77,22 +78,8 @@ public class ChatClient {
                 System.err.println("KeyGen Error: " + e.getMessage());
                 System.exit(1);
             }
-            //保存密钥
-            try {
-                String keyStoreFilePath = account.name + ".key";
-                KeyFile keyFile = KeyFile.newBuilder()
-                        .setName(account.name).setKey(GRpcUtil.getKeyByteString(account.sk))
-                        .build();
-                GRpcUtil.writeBytesToFile(keyFile.toByteArray(), keyStoreFilePath);
-            } catch (IOException e) {
-                logger.error("Save Key File \"" + result.getOptionValue("k") + "\" Failed: " + e.getMessage());
-                System.err.println("Save Key File \"" + result.getOptionValue("k") + "\" Failed: " + e.getMessage());
-                System.exit(1);
-            } finally {
-                logger.info(" - Key File \"" + account.name + ".key\" Generated and Saved");
-            }
+            keyFileSaveFlag = true;
         }
-        logger.info(" - SET Account Name: " + account.name);
     }
 
     //运行客户端线程
@@ -102,7 +89,7 @@ public class ChatClient {
             // 与服务器连接的通道
             ManagedChannel channel = ManagedChannelBuilder.forTarget(connectTarget).usePlaintext().build();
             GRpcClient client = new GRpcClient(channel);
-            client.setAccountInfo(account.name, account.pk, account.sk);
+            client.setAccountInfo(account.id, account.name, account.pk, account.sk);
             //登录
             try {
                 CountDownLatch finishLatch = client.login();
@@ -122,7 +109,21 @@ public class ChatClient {
                 System.err.println("Login failed: " + e.getMessage());
                 System.exit(1);
             }
-
+            if (keyFileSaveFlag) {
+                //保存密钥
+                try {
+                    String keyStoreFilePath = account.name + ".key";
+                    KeyFile keyFile = KeyFile.newBuilder()
+                            .setId(GRpcClient.getAccountId()).setKey(GRpcUtil.getKeyByteString(account.sk))
+                            .build();
+                    GRpcUtil.writeBytesToFile(keyFile.toByteArray(), keyStoreFilePath);
+                } catch (IOException e) {
+                    logger.error("Save Key File \"" + account.name + ".key\" Failed: " + e.getMessage());
+                    System.err.println("Save Key File \"" + account.name + ".key\" Failed: " + e.getMessage());
+                    System.exit(1);
+                }
+                logger.info(" - Key File \"" + account.name + ".key\" Generated and Saved");
+            }
             Scanner scanner = new Scanner(System.in);
             logger.info("Receiver: " + client.getReceiver());
             //循环，直到登出
@@ -183,6 +184,7 @@ public class ChatClient {
 
     //账户信息
     private static class Account {
+        public long id = -1;
         public String name = GRpcUtil.getRandomString(6);
         public KeysetHandle pk = null;
         public KeysetHandle sk = null;

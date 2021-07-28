@@ -9,17 +9,18 @@ import java.security.GeneralSecurityException;
 import java.util.Arrays;
 
 public class UserInfo {
+    private long id = -1;
     private String name = null;
     private boolean online = false;
     private ByteString pk = null;
-    private String skHash = null;
     private StreamObserver<Pack> stream = null;
 
     @Override
     public String toString() {
         StringBuffer sb = new StringBuffer();
         sb.append("-".repeat(10)).append("\n")
-                .append("User  : ").append(name).append("\n")
+                .append("User  : ").append(id).append("\n")
+                .append("Name  : ").append(name).append("\n")
                 .append("Status: ").append((online ? "online" : "offline")).append("\n")
                 .append("pk    : ");
         try {
@@ -28,7 +29,6 @@ public class UserInfo {
             sb.append(pk.toString());
         }
         sb.append("\n")
-                .append("skHash: ").append(skHash).append("\n")
                 .append("stream: ").append(stream).append("\n")
                 .append("-".repeat(10)).append("\n")
         ;
@@ -51,14 +51,6 @@ public class UserInfo {
         this.pk = pk;
     }
 
-    public String getSkHash() {
-        return skHash;
-    }
-
-    public void setSkHash(String skHash) {
-        this.skHash = skHash;
-    }
-
     public StreamObserver<Pack> getStream() {
         return stream;
     }
@@ -78,5 +70,13 @@ public class UserInfo {
     public void logout() {
         this.online = false;
         this.stream = null;
+    }
+
+    public long getId() {
+        return id;
+    }
+
+    public void setId(long id) {
+        this.id = id;
     }
 }

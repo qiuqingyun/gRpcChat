@@ -3,6 +3,8 @@ package org.gRpcChat;
 import com.google.crypto.tink.*;
 
 import com.google.protobuf.ByteString;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -14,10 +16,12 @@ import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.Date;
 import java.util.Random;
 
 public class GRpcUtil {
+    private final static Logger logger = LoggerFactory.getLogger(GRpcServer.class.getName());
     private static final String chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
     //获取当前时间戳
@@ -48,16 +52,20 @@ public class GRpcUtil {
         return sb.toString();
     }
 
+    //计算密钥的哈希值
+    public static String keyHash(KeysetHandle key) throws IOException, NoSuchAlgorithmException {
+        return SHA256(getKeyByteString(key).toByteArray());
+    }
+
     //计算字符串的SHA256哈希值
-    public static String SHA256(String input) {
-        byte[] hash = null;
+    public static String SHA256(byte[] input) {
+        String sha256 = null;
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+            sha256 = bytesToHex(MessageDigest.getInstance("SHA-256").digest(input));
         } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
+            logger.warn("Run SHA256 Error: " + e);
         }
-        return bytesToHex(hash);
+        return sha256;
     }
 
     //字节数组转十六进制字符串
@@ -94,11 +102,30 @@ public class GRpcUtil {
         return ByteString.copyFrom(string.getBytes(StandardCharsets.UTF_8));
     }
 
+    //将byte数组存储至文件
     public static void writeBytesToFile(byte[] bFile, String fileDest) throws IOException {
         Files.write(Paths.get(fileDest), bFile);
     }
 
+    //从文件读取byte数组
     public static byte[] readBytesFromFile(String filePath) throws IOException {
         return Files.readAllBytes(new File(filePath).toPath());
+    }
+
+    //获取盐
+    public static String getSalt() {
+        SecureRandom random;
+        try {
+            random = SecureRandom.getInstance("SHA1PRNG");
+        } catch (NoSuchAlgorithmException e) {
+            random = new SecureRandom();
+        }
+        random.setSeed(SecureRandom.getSeed(32));
+        return SHA256(getRandomString(32).getBytes(StandardCharsets.UTF_8));
+    }
+
+    //加盐哈希
+    public static String addSalt(String input, String salt) {
+        return SHA256((input + salt).getBytes(StandardCharsets.UTF_8));
     }
 }

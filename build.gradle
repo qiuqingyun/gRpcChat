@@ -25,6 +25,8 @@ dependencies {
     implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
     // https://mvnrepository.com/artifact/com.google.crypto.tink/tink
     implementation group: 'com.google.crypto.tink', name: 'tink', version: '1.6.1'
+    // https://mvnrepository.com/artifact/org.xerial/sqlite-jdbc
+    implementation group: 'org.xerial', name: 'sqlite-jdbc', version: '3.36.0'
 
 }
 

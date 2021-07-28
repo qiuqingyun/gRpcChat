@@ -14,15 +14,16 @@ service StringMessage {
 //服务器给客户端推送的消息：登录结果( to 请求登录的客户端)，推送消息( to 接收消息的客户端)，推送消息结果( to 发送消息的客户端)
 message Pack {
   string act = 1;
-  string sender = 2;
-  string receiver = 3;
+  int64 sender = 2;
+  int64 receiver = 3;
   bytes message = 4;
   repeated UserInfoPack userInfoList = 5;
 }
 
 //传递用户信息的包
 message UserInfoPack{
-  string name = 1;
-  bytes pk = 2;
-  optional string skHash = 3;
+  int64 id=1;
+  string name = 2;
+  bytes pk = 3;
+  optional string skHash = 4;
 }
